@@ -28,7 +28,10 @@ client.on("message", async (message) => {
 	if (!message.content.startsWith(prefix) || message.author.bot) return;
 	const args = message.content.slice(prefix.length).trim().split(/ +/);
 	const command = args.shift().toLowerCase();
-	if (!client.commands.has(command)) return;
+	if (!client.commands.has(command)) {
+		await client.commands.get("help").execute(message);
+		return;
+	}
 
 	try {
 		if (args.length === client.commands.get(command).argsCount) {
@@ -44,6 +47,9 @@ client.on("message", async (message) => {
 
 client.once("ready", async () => {
 	console.log("The Discord bot is ready!");
+	await client.user.setActivity("Jonathan Holloway", { type: "LISTENING" });
+	await client.user.setStatus("idle");
+
 	let open_sections;
 
 	await check_open_courses();
@@ -53,6 +59,7 @@ client.once("ready", async () => {
 			open_sections = (await axios.get("https://sis.rutgers.edu/soc/api/openSections.json?year=2021&term=9&campus=NB")).data;
 		} catch (err) {
 			if (err.code === "ECONNRESET") console.error("Open courses endpoint connection reset!");
+			console.log("Interval finished!");
 			setTimeout(await check_open_courses, 6000);
 			return;
 		}
@@ -100,7 +107,7 @@ client.once("ready", async () => {
 						{ name: "Section", value: section.section_number, inline: true },
 						{ name: "Index", value: item.index, inline: true },
 						{ name: "Course Name", value: course.title, inline: true },
-						{ name: "Instructor", value: section.instructorsText, inline: true },
+						{ name: "Instructor", value: (section.instructorsText || "Unavailable"), inline: true },
 						{ name: "Register", value: `[WebReg](https://sims.rutgers.edu/webreg/editSchedule.htm?login=cas&semesterSelection=92021&indexList=${item.index})` }
 					)
 					.setTimestamp()
@@ -149,6 +156,6 @@ client.once("ready", async () => {
 });
 
 let mongodb = new database();
-mongodb.connectDB().then(() => {
-	client.login(process.env.TOKEN);
-}).catch(console.error);
+mongodb.connectDB()
+	.then(client.login(process.env.TOKEN))
+	.catch(console.error);

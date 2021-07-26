@@ -85,7 +85,7 @@ module.exports = {
 				{ name: "Course", value: section.courseString, inline: true },
 				{ name: "Section", value: section.section_number, inline: true },
 				{ name: "Index", value: args[0], inline: true },
-				{ name: "Instructor", value: section.instructorsText }
+				{ name: "Instructor", value: (section.instructorsText || "Unavailable") }
 			)
 			.setColor("#27db84");
 
