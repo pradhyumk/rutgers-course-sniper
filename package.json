@@ -1,0 +1,31 @@
+{
+  "name": "rutgers-course-sniper",
+  "version": "1.0.0",
+  "engines": {
+    "node": "v14.17"
+  },
+  "description": "A Discord bot which notifies users when a course is open.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --trace-warnings index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pradhyumk/rutgers-course-sniper.git"
+  },
+  "author": "Pradhyum Krishnan",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pradhyumk/rutgers-course-sniper/issues"
+  },
+  "homepage": "https://github.com/pradhyumk/rutgers-course-sniper#readme",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "discord.js": "^12.5.3",
+    "dotenv": "^10.0.0",
+    "mongodb": "^4.0.1"
+  },
+  "devDependencies": {
+    "eslint": "^7.31.0"
+  }
+}
