@@ -124,23 +124,14 @@ client.once("ready", async () => {
 						console.error(`User ${user} does share a server with the Discord bot.`);
 						continue;
 					}
-
 					notify.push(u.send(notify_embed)
 						.then(() => {
 							console.log(`Successfully notified user ${user} about opening for this index ${item.index}`);
 						})
 						.catch(() => {
 							console.error(`User ${user} does not allow direct messages with bot or bot's guild.`);
-
+							return;
 						}));
-
-					try {
-						await u.send(notify_embed);
-						console.log(`Successfully notified user ${user} about opening for this index ${item.index}`);
-					} catch {
-						console.error(`User ${user} does not allow direct messages with bot or bot's guild.`);
-						continue;
-					}
 				}
 				try {
 					await Promise.allSettled(notify);
