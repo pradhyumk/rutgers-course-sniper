@@ -17,13 +17,6 @@ for (const file of commandFiles) {
 
 const prefix = process.env.PREFIX;
 
-process.on("SIGINT", async signal => {
-	console.log(`Received signal: ${signal}. Destroying Discord client.`);
-	client.destroy();
-	await mongodb.disconnectDB();
-	process.exit(0);
-});
-
 client.on("message", async (message) => {
 	if (!message.content.startsWith(prefix) || message.author.bot) return;
 	const args = message.content.slice(prefix.length).trim().split(/ +/);
@@ -145,6 +138,15 @@ client.once("ready", async () => {
 		setTimeout(await check_open_courses, 6000);
 	}
 });
+
+async function exit_process(signal) {
+	console.log(`Received signal: ${signal}. Destroying Discord client.`);
+	client.destroy();
+	await mongodb.disconnectDB();
+	process.exit(0);
+}
+process.on("SIGINT", exit_process);
+process.on("SIGTERM", exit_process);
 
 let mongodb = new database();
 mongodb.connectDB()
