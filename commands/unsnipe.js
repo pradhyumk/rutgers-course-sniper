@@ -1,94 +1,121 @@
-const Discord = require("discord.js");
+const { MessageEmbed } = require("discord.js");
+const { SlashCommandBuilder } = require('@discordjs/builders');
 
 module.exports = {
 	name: "unsnipe",
 	description: "Remove a snipe request.",
-	usage: `${process.env.PREFIX} unsnipe index_number`,
-	argsCount: 1,
-	async execute(message, mongodb, args) {
-		if (isNaN(args[0]) === true) {
-			await this.failure(message);
-			return;
-		}
-
-		let disc_embed = new Discord.MessageEmbed()
+	command: new SlashCommandBuilder().setName("unsnipe")
+									  .setDescription("Disable notifications for section opening.")
+									  .addIntegerOption((option) => 
+										  option
+										  		.setName("index_number")
+												.setDescription("Enter the course index number.")
+												.setRequired(true)
+									  ),
+	async execute(interaction, mongodb, mutex) {
+		let disc_embed = new MessageEmbed()
 			.setAuthor("Remove Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
 
 		try {
 			let sections = mongodb.db.collection("sections");
-			let section = await sections.findOne({ "_id": args[0] });
+			let section = await sections.findOne({ "_id": `${interaction.options.getInteger("index_number")}` });
 
-			let snipes = mongodb.db.collection("snipes");
-			let search = await snipes.findOne({ "index": args[0] });
+			if (!section) {
+				disc_embed
+					.setTitle("Invalid Index")
+					.setDescription(`Index ${interaction.options.getInteger("index_number")} is not valid.`)
+					.setColor("#FF5733");
 
-			if (search && search.users.includes(message.author.id)) {
-				if (search.users.length == 1) {
-					await snipes.deleteOne({ index: args[0] });
-				}
-				else if (search.users.includes(message.author.id)) {
-					await snipes.updateOne({ index: args[0] }, {
-						$pull: {
-							users: message.author.id
-						}
-					});
-				}
+				await interaction.reply({ embeds: [disc_embed], ephemeral: true })
+				return
+			}
+
+			if (await this.remove_snipe(interaction.options.getInteger("index_number").toString(), interaction.user.id, mongodb, mutex)) {
 				disc_embed
 					.setTitle("Snipe removed!")
 					.addFields(
 						{ name: "Course", value: section.courseString, inline: true },
 						{ name: "Section", value: section.section_number, inline: true },
-						{ name: "Index", value: args[0], inline: true },
+						{ name: "Index", value: `${interaction.options.getInteger("index_number")}`, inline: true },
 						{ name: "Instructor", value: (section.instructorsText || "Unavailable") },
 					)
 					.setColor("#27db84");
+				await interaction.reply({embeds: [disc_embed]});
 			} else {
 				disc_embed
-					.setTitle("Invalid index")
-					.setDescription(`You have no active snipe for index ${args[0]}`)
+					.setTitle("Unknown Index")
+					.setDescription(`You have no active snipe for index ${interaction.options.getInteger("index_number")}`)
 					.setColor("#f5a856");
+
+				await interaction.reply({ embeds: [disc_embed], ephemeral: true })
 			}
 
-			if (message.channel.type === "text") {
-				disc_embed.setFooter(`Requested by ${message.author.tag}`, message.author.displayAvatarURL({
-					format: "png",
-					dynamic: true,
-					size: 64
-				}));
-
-				await message.delete();
-				await message.channel.send(`<@${message.author.id}>`, disc_embed);
-			} else {
-				await message.channel.send(disc_embed);
-			}
 		} catch (error) {
-			console.error(error);
-			message.reply("Your request was unsuccessful!");
+			console.error(error)
+			const embed = new MessageEmbed().setTitle("An error occurred!")
+				.setDescription(`Your request was not processed.`)
+				.setColor("#FF5733");
+			await interaction.reply({ embeds: [embed] })
 		}
 	},
-	async failure(message) {
-		let disc_embed = new Discord.MessageEmbed();
-		disc_embed
-			.setAuthor("Remove Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png")
-			.setTitle("Invalid arguments!")
-			.addFields(
-				{ name: "Description", value: this.description },
-				{ name: "Usage", value: "`" + this.usage + "`" }
-			)
-			.setColor("#f5a856");
+	async unsnipe_button(interaction, mongodb, mutex) {
+		const button_vals = interaction.customId.split("-");
 
-		if (message.channel.type === "text") {
+		let sections = mongodb.db.collection("sections");
+		let section = await sections.findOne({ "_id": button_vals[1] });
+
+		let disc_embed = new MessageEmbed()
+			.setAuthor("Remove Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
+		
+		if (await this.remove_snipe(button_vals[1], button_vals[2], mongodb, mutex)) {
 			disc_embed
-				.setFooter(`Requested by ${message.author.tag}`, message.author.displayAvatarURL({
-					format: "png",
-					dynamic: true,
-					size: 64
-				}));
-			await message.delete();
-			await message.channel.send(`<@${message.author.id}>`, disc_embed);
-		} else {
-			await message.channel.send(disc_embed);
-		}
+				.setTitle("Snipe removed!")
+				.addFields(
+					{ name: "Course", value: section.courseString, inline: true },
+					{ name: "Section", value: section.section_number, inline: true },
+					{ name: "Index", value: button_vals[1], inline: true },
+					{ name: "Instructor", value: (section.instructorsText || "Unavailable") },
+				)
+			.setColor("#27db84");
+			await interaction.reply({embeds: [disc_embed]});
 
-		return;
+		} else {
+			disc_embed
+				.setTitle("Unknown Index")
+				.setDescription(`It seems like you have already unsniped index \`${button_vals[1]}\`.`)
+				.setColor("#f5a856");
+
+			await interaction.reply({ embeds: [disc_embed], ephemeral: true })
+		}
+	},
+	async remove_snipe(index_number, user_id, mongodb, mutex) {
+		const release = await mutex.acquire();
+
+		let snipes = mongodb.db.collection("snipes");
+		let search = await snipes.findOne({ "index": index_number });
+
+		if (search && search.users.includes(user_id)) {
+			try {
+				if (search.users.length == 1) {
+					await snipes.deleteOne({ index: index_number });
+				}
+				else if (search.users.includes(user_id)) {
+					await snipes.updateOne({ index: index_number }, {
+						$pull: {
+							users: user_id
+						}
+					});
+				}
+			} catch(error) {
+				console.error(error);
+				release();
+				return false;
+			}
+		} else {
+			release()
+			return false;
+		}
+		release();
+		return true;
 	}
 };

@@ -1,82 +1,96 @@
-const Discord = require("discord.js");
+const { MessageEmbed } = require("discord.js");
+const { SlashCommandBuilder } = require('@discordjs/builders');
+const axios = require("axios").default;
 
 module.exports = {
 	name: "snipe",
-	description: "Adds course snipe to database for checking.",
-	usage: `${process.env.PREFIX} snipe index_number`,
-	argsCount: 1,
-	async execute(message, mongodb, args) {
-		if (isNaN(args[0]) === true) {
-			await this.failure(message);
-			return;
-		} 
-
-		let disc_embed = new Discord.MessageEmbed()
+	description: "Monitor index for openings.",
+	command: new SlashCommandBuilder().setName("snipe")
+		.setDescription("Get notified for a section opening.")
+		.addIntegerOption((option) =>
+			option
+				.setName("index_number")
+				.setDescription("Enter the section index number.")
+				.setRequired(true)
+		),
+	async execute(interaction, mongodb, mutex) {
+		let disc_embed = new MessageEmbed()
 			.setAuthor("Add Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
+		
+		try {
+			open_sections = (await axios.get("https://sis.rutgers.edu/soc/api/openSections.json?year=2021&term=9&campus=NB")).data;
+			if (open_sections.includes(interaction.options.getInteger("index_number").toString())) {
+				disc_embed
+					.setTitle("Course Open!")
+					.setDescription("This section is already open! You can request notifications when this section is closed.")
+					.setColor("#27db84")
+					.setFields({ name: "Index", value: `${interaction.options.getInteger("index_number")}`, inline: true });
 
+				await interaction.reply({ embeds: [disc_embed]})
+				return;
+			}
+		} catch (error) {
+			if (error.code !== "ECONNRESET") {	
+				console.error(error);
+				const embed = new MessageEmbed().setTitle("An error occurred!")
+					.setDescription(`Your request was not processed.`)
+					.setColor("#FF5733");
+				await interaction.reply({ embeds: [embed]});
+				return;
+
+			}
+		}
+
+		const release = await mutex.acquire();
 		let sections = mongodb.db.collection("sections");
-		let section = await sections.findOne({ "_id": args[0] });
+		let section = await sections.findOne({ "_id": `${interaction.options.getInteger("index_number")}` });
 
 		if (!section) {
 			disc_embed.setTitle("Invalid index!")
-				.setDescription(`Index ${args[0]} does not exist.`)
+				.setDescription(`Index ${interaction.options.getInteger("index_number")} does not exist.`)
 				.setColor("#f5a856");
 
-			if (message.channel.type === "text") {
-				await message.delete();
-				disc_embed.setFooter(`Requested by ${message.author.tag}`, message.author.displayAvatarURL({
-					format: "png",
-					dynamic: true,
-					size: 64
-				}));
-				await message.channel.send(`<@${message.author.id}>`, disc_embed);
-			} else {
-				await message.channel.send(disc_embed);
-			}
+			await interaction.reply({ embeds: [disc_embed], ephemeral: true})
+			release();
 			return;
 		}
 
 		let snipes = mongodb.db.collection("snipes");
-		let search = await snipes.findOne({ "index": args[0] });
+		let search = await snipes.findOne({ "index": `${interaction.options.getInteger("index_number")}` });
 
 		try {
 			if (search) {
-				if (search.users.includes(message.author.id)) {
+				if (search.users.includes(interaction.user.id)) {
 					disc_embed.setTitle("Index already exists!")
-						.setDescription(`Index ${args[0]} is actively being checked.`)
+						.setDescription(`Index ${interaction.options.getInteger("index_number")} is actively being checked.`)
 						.setColor("#f5a856");
 
-					if (message.channel.type === "text") {
-						await message.delete();
-						disc_embed.setFooter(`Requested by ${message.author.tag}`, message.author.displayAvatarURL({
-							format: "png",
-							dynamic: true,
-							size: 64
-						}));
-						await message.channel.send(`<@${message.author.id}>`, disc_embed);
-					} else {
-						await message.channel.send(disc_embed);
-					}
+					await interaction.reply({ embeds: [disc_embed], ephemeral: true })
+					release();
 					return;
 				}
 
-				await snipes.updateOne({ "index": args[0] }, {
+				await snipes.updateOne({ "index": `${interaction.options.getInteger("index_number")}` }, {
 					"$push": {
-						"users": message.author.id
+						"users": interaction.user.id
 					}
 				});
 
 			} else {
 				await snipes.insertOne({
-					index: args[0],
+					index: `${interaction.options.getInteger("index_number")}`,
 					status: "closed",
-					users: [message.author.id]
+					users: [interaction.user.id]
 				});
 			}
 
 		} catch (error) {
 			console.error(error);
-			await message.reply("An error occurred while updating the database.");
+			const embed = new MessageEmbed().setTitle("An error occurred!")
+				.setDescription(`The database did not update your request.`)
+				.setColor("#FF5733");
+			await interaction.reply({ embeds: [embed]});
+			release();
 			return;
 		}
 
@@ -84,64 +98,33 @@ module.exports = {
 			.addFields(
 				{ name: "Course", value: section.courseString, inline: true },
 				{ name: "Section", value: section.section_number, inline: true },
-				{ name: "Index", value: args[0], inline: true },
+				{ name: "Index", value: `${interaction.options.getInteger("index_number")}`, inline: true },
 				{ name: "Instructor", value: (section.instructorsText || "Unavailable") }
 			)
 			.setColor("#27db84");
 
 		try {
-			await message.author.send(disc_embed);
+			await interaction.user.send({embeds: [disc_embed]});
 		} catch (error) {
 			if (error.code === 50007) {
-				disc_embed.setTitle("DMs disabled!")
-					.setDescription("Your snipe request has been added but you will not receive course open notifications until you enable direct messages for this server.")
+				disc_embed.setTitle("Request added, but DMs are disabled!")
+					.setDescription("The bot will not be able to message you until you allow DMs for this server.")
 					.setColor("#f5a856");
 
-				await message.channel.send(`<@${message.author.id}>`, disc_embed);
+				await interaction.reply({ embeds: [disc_embed]});
+				release();
 				return;
 
 			}
 		}
 
-		if (message.channel.type === "text") {
-			await message.delete();
-			let disc_embed2 = new Discord.MessageEmbed()
-				.setTitle("Check DMs")
-				.setDescription("Notifications for course openings will be sent via direct message.")
-				.setAuthor("Add Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png")
-				.setFooter(`Requested by ${message.author.tag}`, message.author.displayAvatarURL({
-					format: "png",
-					dynamic: true,
-					size: 64
-				}));
+		let disc_embed2 = new MessageEmbed()
+			.setTitle("Check DMs")
+			.setDescription("Notifications for course openings will be sent via direct message.")
+			.setAuthor("Add Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
 
-			await message.channel.send(`<@${message.author.id}>`, disc_embed2);
-		}
-	},
-	async failure(message) {
-		let disc_embed = new Discord.MessageEmbed();
-		disc_embed
-			.setAuthor("Add Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png")
-			.setTitle("Invalid arguments!")
-			.addFields(
-				{name: "Description", value: this.description},
-				{name: "Usage", value: "`" + this.usage + "`"}
-			)
-			.setColor("#f5a856");
+			await interaction.reply({ embeds: [disc_embed2]});
+			release();
 
-		if (message.channel.type === "text") {
-			disc_embed
-				.setFooter(`Requested by ${message.author.tag}`, message.author.displayAvatarURL({
-					format: "png",
-					dynamic: true,
-					size: 64
-				}));
-			await message.delete();
-			await message.channel.send(`<@${message.author.id}>`, disc_embed);
-		} else {
-			await message.channel.send(disc_embed);
-		}
-
-		return;
 	}
 };

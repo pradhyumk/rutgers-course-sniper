@@ -1,11 +1,12 @@
-const Discord = require("discord.js");
+const { MessageEmbed } = require("discord.js");
+const { SlashCommandBuilder } = require('@discordjs/builders');
 
 module.exports = {
 	name: "snipes",
 	description: "Displays active snipes for user.",
-	usage: `${process.env.PREFIX} snipes`,
-	argsCount: 0,
-	async execute(message, mongodb) {
+	command: new SlashCommandBuilder().setName("snipes")
+									  .setDescription("Displays active snipes."),
+	async execute(interaction, mongodb) {
 		let snipes = mongodb.db.collection("snipes");
 		let sections = mongodb.db.collection("sections");
 		let courses = mongodb.db.collection("courses");
@@ -13,7 +14,7 @@ module.exports = {
 		let user_snipes = await snipes.find(
 			{
 				"users": {
-					$all: [message.author.id]
+					$all: [interaction.user.id]
 				}
 			}).toArray();
 
@@ -25,7 +26,7 @@ module.exports = {
 			result += `\`${s.index}\` - ${course.title} (Section ${snipe.section_number})\n`;
 		}
 
-		let disc_embed = new Discord.MessageEmbed();
+		let disc_embed = new MessageEmbed();
 
 		if (user_snipes.length !== 0) {
 			disc_embed
@@ -40,20 +41,7 @@ module.exports = {
 				.setColor("#f5a856")
 				.setDescription("Add an index to start monitoring for openings.");
 		}
-
-		if (message.channel.type === "text") {
-			disc_embed
-				.setFooter(`Requested by ${message.author.tag}`, message.author.displayAvatarURL({
-					format: "png",
-					dynamic: true,
-					size: 64
-				}));
-			await message.delete();
-			await message.channel.send(`<@${message.author.id}>`, disc_embed);
-		} else {
-			await message.channel.send(disc_embed);
-		}
-
+		await interaction.reply({ embeds: [disc_embed]})
 	},
 	async failure(message, mongodb) {
 		await this.execute(message, mongodb);

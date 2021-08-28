@@ -1,59 +1,105 @@
 const axios = require("axios").default;
-const Discord = require("discord.js");
+const { Client, Intents, MessageEmbed, MessageActionRow, MessageButton } = require("discord.js");
 const dotenv = require("dotenv");
 const fs = require("fs");
 const database = require("./database.js");
+const { Mutex } = require("async-mutex");
 
-dotenv.config();
-const client = new Discord.Client();
-
-client.commands = new Discord.Collection();
-const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
-
-for (const file of commandFiles) {
-	const command = require(`./commands/${file}`);
-	client.commands.set(command.name, command);
+const mutex = {
+	snipe: new Mutex(),
+	unsnipe: new Mutex()
 }
 
+dotenv.config();
+const client = new Client({
+	intents:
+		[
+			Intents.FLAGS.GUILDS,
+			Intents.FLAGS.GUILD_PRESENCES,
+			Intents.FLAGS.GUILD_MESSAGES,
+			Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
+			Intents.FLAGS.GUILD_MEMBERS,
+			Intents.FLAGS.GUILD_INTEGRATIONS,
+			Intents.FLAGS.DIRECT_MESSAGES,
+			Intents.FLAGS.DIRECT_MESSAGE_REACTIONS,
+			Intents.FLAGS.DIRECT_MESSAGE_TYPING
+		],
+	 partials: ['USER', 'GUILD_MEMBER', 'MESSAGE', 'CHANNEL', 'REACTION'] });
+
+const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
 const prefix = process.env.PREFIX;
 
-client.on("message", async (message) => {
-	if (!message.content.startsWith(prefix) || message.author.bot) return;
-	const args = message.content.slice(prefix.length).trim().split(/ +/);
-	const command = args.shift().toLowerCase();
-	if (!client.commands.has(command)) {
-		await client.commands.get("help").execute(message);
-		return;
-	}
+client.on("interactionCreate", async interaction => {
+	if (interaction.isCommand()) {
+		let m = null;
+		if (mutex.hasOwnProperty(interaction.commandName))
+			m = mutex[interaction.commandName];
 
-	try {
-		if (args.length === client.commands.get(command).argsCount) {
-			await client.commands.get(command).execute(message, mongodb, args);
-		} else {
-			await client.commands.get(command).failure(message);
+		try {
+			if (!commandFiles.includes(interaction.commandName + ".js")) {
+				const command = require(`./commands/help.js`)
+				await command.execute(interaction);
+				return;
+			} else {
+				const command = require(`./commands/${interaction.commandName}.js`)
+				await command.execute(interaction, mongodb, m);
+			}
+		} catch (error) {
+			console.error(error)
+			const embed = new MessageEmbed().setTitle("An error occurred!")
+				.setDescription(`Your request was not processed.`)
+				.setColor("#FF5733");
+			await interaction.reply({ embeds: [embed]});
 		}
-	} catch (error) {
-		console.error(error);
-		message.reply("An error occurred when executing the command!");
+	} else if (interaction.isButton()) {
+		const button_vals = interaction.customId.split("-"); // command-index-userid
+		let m = null;
+		if (mutex.hasOwnProperty(button_vals[0])) {
+			m = mutex[button_vals[0]];
+		}
+
+		if (button_vals[0] === "unsnipe") {
+			const command = require(`./commands/unsnipe.js`)
+			await command.unsnipe_button(interaction, mongodb, mutex.unsnipe);
+		}
+	}
+})
+
+client.on("messageCreate", async (message) => {
+	if (message.author.bot) return;
+
+	if (message.content.startsWith(prefix)) {
+		// Legacy commands are no longer supported. 
+		const disc_embed = new MessageEmbed()
+								.setColor("#f5a856")
+								.setTitle("Use Slash `/` Commands.")
+								.setDescription(`Legacy commands with the \`${prefix}\` prefix are no longer supported.`);
+		
+		if (message.guild !== null) {
+			disc_embed
+				.addFields({ name: "Server Owners", value: `If you cannot see the slash commands, [reinvite](${process.env.BOT_INVITE_URL}) the bot to add the appropiate permissions.`} );
+		}
+		await message.reply({ embeds: [disc_embed] });
+		return;
 	}
 });
 
 client.once("ready", async () => {
 	console.log("The Discord bot is ready!");
-	await client.user.setActivity("Jonathan Holloway", { type: "LISTENING" });
-	await client.user.setStatus("idle");
+	client.user.setActivity("Schedule of Classes", { type: "WATCHING" });
+	client.user.setStatus("online");
 
 	let open_sections;
 
 	await check_open_courses();
 	async function check_open_courses() {
-		console.log("Interval started!");
+		// console.log("Interval started!");
 		try {
 			open_sections = (await axios.get("https://sis.rutgers.edu/soc/api/openSections.json?year=2021&term=9&campus=NB")).data;
 		} catch (err) {
 			if (err.code === "ECONNRESET") console.error("Open courses endpoint connection reset!");
-			console.log("Interval finished!");
-			setTimeout(await check_open_courses, 6000);
+			// console.log("Interval finished!");
+			setTimeout(check_open_courses, 6000);
 			return;
 		}
 
@@ -72,11 +118,11 @@ client.once("ready", async () => {
 				continue;
 			}
 			else if (!open_sections.includes(item.index) && item.status === "closed") {
-				console.log(`Index ${item.index} is currently closed.`);
+				// console.log(`Index ${item.index} is currently closed.`);
 				continue;
 			}
 			else if (open_sections.includes(item.index) && item.status === "open") {
-				console.log(`Notified users already that index ${item.index} is open.`);
+				// console.log(`Notified users already that index ${item.index} is open.`);
 				continue;
 			}
 			else {
@@ -93,16 +139,15 @@ client.once("ready", async () => {
 				const courses = mongodb.db.collection("courses");
 				let course = await courses.findOne({ "_id": section.courseString });
 
-				let notify_embed = new Discord.MessageEmbed()
+				let notify_embed = new MessageEmbed()
 					.setTitle("Section open!")
 					.addFields(
 						{ name: "Course", value: section.courseString, inline: true },
 						{ name: "Section", value: section.section_number, inline: true },
 						{ name: "Index", value: item.index, inline: true },
 						{ name: "Course Name", value: course.title, inline: true },
-						{ name: "Instructor", value: (section.instructorsText || "Unavailable"), inline: true },
-						{ name: "Register", value: `[WebReg](https://sims.rutgers.edu/webreg/editSchedule.htm?login=cas&semesterSelection=92021&indexList=${item.index})` }
-					)
+						{ name: "Instructor", value: (section.instructorsText || "Unavailable"), inline: true }
+						)
 					.setTimestamp()
 					.setAuthor("Rutgers University", "https://scarletknights.com/images/2020/9/30/BlackR.png", "https://rutgers.edu/")
 					.setFooter("Fall 2021")
@@ -117,7 +162,22 @@ client.once("ready", async () => {
 						console.error(`User ${user} does share a server with the Discord bot.`);
 						continue;
 					}
-					notify.push(u.send(notify_embed)
+
+					const row = new MessageActionRow()
+						.addComponents(
+							new MessageButton()
+								.setURL(`https://sims.rutgers.edu/webreg/editSchedule.htm?login=cas&semesterSelection=92021&indexList=${item.index})`)
+								.setLabel("REGISTER")
+								.setStyle("LINK")
+						)
+						.addComponents(
+							new MessageButton()
+								.setCustomId(`unsnipe-${item.index}-${user}`)
+								.setStyle("DANGER")
+								.setLabel("UNSNIPE")
+						);
+
+					notify.push(u.send({ embeds: [notify_embed], components: [row] })
 						.then(() => {
 							console.log(`Successfully notified user ${user} about opening for this index ${item.index}`);
 						})
@@ -133,9 +193,8 @@ client.once("ready", async () => {
 				}
 			}
 		}
-
-		console.log("Interval finished!");
-		setTimeout(await check_open_courses, 6000);
+		// console.log("Interval finished!");
+		setTimeout(check_open_courses, 6000);
 	}
 });
 
@@ -150,5 +209,5 @@ process.on("SIGTERM", exit_process);
 
 let mongodb = new database();
 mongodb.connectDB()
-	.then(client.login(process.env.TOKEN))
+	.then(() => client.login(process.env.TOKEN))
 	.catch(console.error);
