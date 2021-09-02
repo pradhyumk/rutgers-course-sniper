@@ -6,7 +6,7 @@ module.exports = {
 	description: "Remove a snipe request.",
 	command: new SlashCommandBuilder().setName("unsnipe")
 									  .setDescription("Disable notifications for section opening.")
-									  .addIntegerOption((option) => 
+									  .addStringOption((option) => 
 										  option
 										  		.setName("index_number")
 												.setDescription("Enter the course index number.")
@@ -16,27 +16,37 @@ module.exports = {
 		let disc_embed = new MessageEmbed()
 			.setAuthor("Remove Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
 
+		if (isNaN(interaction.options.getString("index_number"))) {
+			disc_embed
+				.setTitle("Invalid entry")
+				.setDescription(`\`${interaction.options.getString("index_number")}\` is not a valid number.`)
+				.setColor("#FF5733");
+
+			await interaction.reply({ embeds: [disc_embed], ephemeral: true })
+			return;
+		}
+
 		try {
 			let sections = mongodb.db.collection("sections");
-			let section = await sections.findOne({ "_id": `${interaction.options.getInteger("index_number")}` });
+			let section = await sections.findOne({ "_id": interaction.options.getString("index_number") });
 
 			if (!section) {
 				disc_embed
 					.setTitle("Invalid Index")
-					.setDescription(`Index ${interaction.options.getInteger("index_number")} is not valid.`)
+					.setDescription(`Index \`${interaction.options.getString("index_number")}\` is not valid.`)
 					.setColor("#FF5733");
 
 				await interaction.reply({ embeds: [disc_embed], ephemeral: true })
 				return
 			}
 
-			if (await this.remove_snipe(interaction.options.getInteger("index_number").toString(), interaction.user.id, mongodb, mutex)) {
+			if (await this.remove_snipe(interaction.options.getString("index_number"), interaction.user.id, mongodb, mutex)) {
 				disc_embed
 					.setTitle("Snipe removed!")
 					.addFields(
 						{ name: "Course", value: section.courseString, inline: true },
 						{ name: "Section", value: section.section_number, inline: true },
-						{ name: "Index", value: `${interaction.options.getInteger("index_number")}`, inline: true },
+						{ name: "Index", value: interaction.options.getString("index_number"), inline: true },
 						{ name: "Instructor", value: (section.instructorsText || "Unavailable") },
 					)
 					.setColor("#27db84");
@@ -44,7 +54,7 @@ module.exports = {
 			} else {
 				disc_embed
 					.setTitle("Unknown Index")
-					.setDescription(`You have no active snipe for index ${interaction.options.getInteger("index_number")}`)
+					.setDescription(`You have no active snipe for index \`${interaction.options.getString("index_number")}\``)
 					.setColor("#f5a856");
 
 				await interaction.reply({ embeds: [disc_embed], ephemeral: true })

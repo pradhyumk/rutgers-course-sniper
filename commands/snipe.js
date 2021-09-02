@@ -7,7 +7,7 @@ module.exports = {
 	description: "Monitor index for openings.",
 	command: new SlashCommandBuilder().setName("snipe")
 		.setDescription("Get notified for a section opening.")
-		.addIntegerOption((option) =>
+		.addStringOption((option) =>
 			option
 				.setName("index_number")
 				.setDescription("Enter the section index number.")
@@ -16,15 +16,25 @@ module.exports = {
 	async execute(interaction, mongodb, mutex) {
 		let disc_embed = new MessageEmbed()
 			.setAuthor("Add Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
+
+		if (isNaN(interaction.options.getString("index_number"))) {
+			disc_embed
+				.setTitle("Invalid entry")
+				.setDescription(`\`${interaction.options.getString("index_number")}\` is not a valid number.`)
+				.setColor("#FF5733");
+
+			await interaction.reply({ embeds: [disc_embed], ephemeral: true })
+			return;
+		}
 		
 		try {
 			open_sections = (await axios.get("https://sis.rutgers.edu/soc/api/openSections.json?year=2021&term=9&campus=NB")).data;
-			if (open_sections.includes(interaction.options.getInteger("index_number").toString())) {
+			if (open_sections.includes(interaction.options.getString("index_number"))) {
 				disc_embed
 					.setTitle("Course Open!")
 					.setDescription("This section is already open! You can request notifications when this section is closed.")
 					.setColor("#27db84")
-					.setFields({ name: "Index", value: `${interaction.options.getInteger("index_number")}`, inline: true });
+					.setFields({ name: "Index", value: `${interaction.options.getString("index_number")}`, inline: true });
 
 				await interaction.reply({ embeds: [disc_embed]})
 				return;
@@ -43,11 +53,11 @@ module.exports = {
 
 		const release = await mutex.acquire();
 		let sections = mongodb.db.collection("sections");
-		let section = await sections.findOne({ "_id": `${interaction.options.getInteger("index_number")}` });
+		let section = await sections.findOne({ "_id": `${interaction.options.getString("index_number")}` });
 
 		if (!section) {
 			disc_embed.setTitle("Invalid index!")
-				.setDescription(`Index ${interaction.options.getInteger("index_number")} does not exist.`)
+				.setDescription(`Index \`${interaction.options.getString("index_number")}\` does not exist.`)
 				.setColor("#f5a856");
 
 			await interaction.reply({ embeds: [disc_embed], ephemeral: true})
@@ -56,13 +66,13 @@ module.exports = {
 		}
 
 		let snipes = mongodb.db.collection("snipes");
-		let search = await snipes.findOne({ "index": `${interaction.options.getInteger("index_number")}` });
+		let search = await snipes.findOne({ "index": interaction.options.getString("index_number") });
 
 		try {
 			if (search) {
 				if (search.users.includes(interaction.user.id)) {
 					disc_embed.setTitle("Index already exists!")
-						.setDescription(`Index ${interaction.options.getInteger("index_number")} is actively being checked.`)
+						.setDescription(`Index \`${interaction.options.getString("index_number")}\` is actively being checked.`)
 						.setColor("#f5a856");
 
 					await interaction.reply({ embeds: [disc_embed], ephemeral: true })
@@ -70,7 +80,7 @@ module.exports = {
 					return;
 				}
 
-				await snipes.updateOne({ "index": `${interaction.options.getInteger("index_number")}` }, {
+				await snipes.updateOne({ "index": `${interaction.options.getString("index_number")}` }, {
 					"$push": {
 						"users": interaction.user.id
 					}
@@ -78,7 +88,7 @@ module.exports = {
 
 			} else {
 				await snipes.insertOne({
-					index: `${interaction.options.getInteger("index_number")}`,
+					index: `${interaction.options.getString("index_number")}`,
 					status: "closed",
 					users: [interaction.user.id]
 				});
@@ -98,7 +108,7 @@ module.exports = {
 			.addFields(
 				{ name: "Course", value: section.courseString, inline: true },
 				{ name: "Section", value: section.section_number, inline: true },
-				{ name: "Index", value: `${interaction.options.getInteger("index_number")}`, inline: true },
+				{ name: "Index", value: interaction.options.getString("index_number"), inline: true },
 				{ name: "Instructor", value: (section.instructorsText || "Unavailable") }
 			)
 			.setColor("#27db84");

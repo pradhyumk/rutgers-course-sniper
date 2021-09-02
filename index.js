@@ -89,6 +89,15 @@ client.once("ready", async () => {
 	client.user.setActivity("Schedule of Classes", { type: "WATCHING" });
 	client.user.setStatus("online");
 
+	const commands = await client.application.commands.fetch();
+	
+	if (commands.size > 0) {
+		console.log("Registered Global Commands: ")
+		commands.forEach((value, key) => {
+			console.log(`Command: ${value.name} (ID: ${key})`);
+		})
+	}	
+
 	let open_sections;
 
 	await check_open_courses();
