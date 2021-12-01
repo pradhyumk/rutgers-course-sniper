@@ -29,6 +29,23 @@ const client = new Client({
 const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
 const prefix = process.env.PREFIX;
 
+let semester_text = ` ${process.env.ACADEMIC_YEAR}`;
+switch (process.env.ACADEMIC_TERM) {
+	case '1':
+		semester_text = 'Spring' + semester_text;
+		break;
+	case '7':
+		semester_text = 'Summer' + semester_text;
+		break;
+	case '9':
+		semester_text = 'Fall' + semester_text;
+		break;
+	case '0':
+		semester_text = 'Winter' + semester_text;
+		break;
+}
+module.exports.semester_text = semester_text;
+
 client.on("interactionCreate", async interaction => {
 	if (interaction.isCommand()) {
 		let m = null;
@@ -104,7 +121,7 @@ client.once("ready", async () => {
 	async function check_open_courses() {
 		// console.log("Interval started!");
 		try {
-			open_sections = (await axios.get("https://sis.rutgers.edu/soc/api/openSections.json?year=2021&term=9&campus=NB")).data;
+			open_sections = (await axios.get(`https://sis.rutgers.edu/soc/api/openSections.json?year=${process.env.ACADEMIC_YEAR}&term=${process.env.ACADEMIC_TERM}&campus=NB`)).data;
 		} catch (err) {
 			if (err.code === "ECONNRESET") console.error("Open courses endpoint connection reset!");
 			// console.log("Interval finished!");
@@ -159,7 +176,7 @@ client.once("ready", async () => {
 						)
 					.setTimestamp()
 					.setAuthor("Rutgers University", "https://scarletknights.com/images/2020/9/30/BlackR.png", "https://rutgers.edu/")
-					.setFooter("Fall 2021")
+					.setFooter(semester_text)
 					.setColor("#27db84");
 
 				let notify = [];
@@ -175,7 +192,7 @@ client.once("ready", async () => {
 					const row = new MessageActionRow()
 						.addComponents(
 							new MessageButton()
-								.setURL(`https://sims.rutgers.edu/webreg/editSchedule.htm?login=cas&semesterSelection=92021&indexList=${item.index})`)
+								.setURL(`https://sims.rutgers.edu/webreg/editSchedule.htm?login=cas&semesterSelection=${process.env.ACADEMIC_TERM}${process.env.ACADEMIC_YEAR}&indexList=${item.index})`)
 								.setLabel("REGISTER")
 								.setStyle("LINK")
 						)

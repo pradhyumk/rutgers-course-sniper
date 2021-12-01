@@ -1,5 +1,6 @@
 const { MessageEmbed } = require("discord.js");
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const semester_text = require("../index.js").semester_text;
 
 module.exports = {
 	name: "unsnipe",
@@ -14,7 +15,7 @@ module.exports = {
 									  ),
 	async execute(interaction, mongodb, mutex) {
 		let disc_embed = new MessageEmbed()
-			.setAuthor("Remove Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
+			.setAuthor(`Remove Snipe ● ${semester_text}`, "https://scarletknights.com/images/2020/9/30/BlackR.png");
 
 		if (isNaN(interaction.options.getString("index_number"))) {
 			disc_embed
@@ -75,7 +76,7 @@ module.exports = {
 		let section = await sections.findOne({ "_id": button_vals[1] });
 
 		let disc_embed = new MessageEmbed()
-			.setAuthor("Remove Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
+			.setAuthor(`Remove Snipe ● ${semester_text}`, "https://scarletknights.com/images/2020/9/30/BlackR.png");
 		
 		if (await this.remove_snipe(button_vals[1], button_vals[2], mongodb, mutex)) {
 			disc_embed

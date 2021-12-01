@@ -1,6 +1,7 @@
-const { MessageEmbed } = require("discord.js");
+const { MessageEmbed, MessageActionRow, MessageButton } = require("discord.js");
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const axios = require("axios").default;
+const semester_text = require("../index.js").semester_text;
 
 module.exports = {
 	name: "snipe",
@@ -15,7 +16,7 @@ module.exports = {
 		),
 	async execute(interaction, mongodb, mutex) {
 		let disc_embed = new MessageEmbed()
-			.setAuthor("Add Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
+			.setAuthor(`Add Snipe ● ${semester_text}`, "https://scarletknights.com/images/2020/9/30/BlackR.png");
 
 		if (isNaN(interaction.options.getString("index_number"))) {
 			disc_embed
@@ -28,7 +29,7 @@ module.exports = {
 		}
 		
 		try {
-			open_sections = (await axios.get("https://sis.rutgers.edu/soc/api/openSections.json?year=2021&term=9&campus=NB")).data;
+			open_sections = (await axios.get(`https://sis.rutgers.edu/soc/api/openSections.json?year=${process.env.ACADEMIC_YEAR}&term=${process.env.ACADEMIC_TERM}&campus=NB`)).data;
 			if (open_sections.includes(interaction.options.getString("index_number"))) {
 				disc_embed
 					.setTitle("Course Open!")
@@ -104,6 +105,14 @@ module.exports = {
 			return;
 		}
 
+		const row = new MessageActionRow()
+		.addComponents(
+			new MessageButton()
+				.setCustomId(`unsnipe-${interaction.options.getString("index_number")}-${interaction.user.id}`)
+				.setStyle("DANGER")
+				.setLabel("UNSNIPE")
+		);
+
 		disc_embed.setTitle("Snipe added!")
 			.addFields(
 				{ name: "Course", value: section.courseString, inline: true },
@@ -114,7 +123,7 @@ module.exports = {
 			.setColor("#27db84");
 
 		try {
-			await interaction.user.send({embeds: [disc_embed]});
+			await interaction.user.send({embeds: [disc_embed], components: [row]});
 		} catch (error) {
 			if (error.code === 50007) {
 				disc_embed.setTitle("Request added, but DMs are disabled!")
@@ -131,7 +140,7 @@ module.exports = {
 		let disc_embed2 = new MessageEmbed()
 			.setTitle("Check DMs")
 			.setDescription("Notifications for course openings will be sent via direct message.")
-			.setAuthor("Add Snipe ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png");
+			.setAuthor(`Add Snipe ● ${semester_text}`, "https://scarletknights.com/images/2020/9/30/BlackR.png");
 
 			await interaction.reply({ embeds: [disc_embed2]});
 			release();

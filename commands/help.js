@@ -1,5 +1,6 @@
-const { MessageEmbed } = require("discord.js");
+const { MessageEmbed, MessageActionRow, MessageButton } = require("discord.js");
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const semester_text = require("../index.js").semester_text;
 
 module.exports = {
 	name: "help",
@@ -10,7 +11,7 @@ module.exports = {
 	async execute(interaction) {
 		let disc_embed = new MessageEmbed();
 		disc_embed
-			.setAuthor("Help ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png")
+			.setAuthor(`Help ● ${semester_text}`, "https://scarletknights.com/images/2020/9/30/BlackR.png")
 			.setTitle("Available Commands")
 			.setColor("#89CFF0")
 			.addFields(
@@ -22,7 +23,15 @@ module.exports = {
 			)
 			.setFooter("Made with ❤️ by Pradhyum Krishnan", "https://avatars.githubusercontent.com/u/11365510");
 
-		await interaction.reply({embeds: [disc_embed]});
+			const row = new MessageActionRow()
+			.addComponents(
+				new MessageButton()
+					.setURL(`${process.env.BOT_INVITE_URL}`)
+					.setLabel("INVITE BOT")
+					.setStyle("LINK")
+			);
+
+		await interaction.reply({embeds: [disc_embed], components: [row]});
 		return;
 	},
 	async failure(interaction) {

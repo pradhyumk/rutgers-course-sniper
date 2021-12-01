@@ -1,5 +1,6 @@
 const { MessageEmbed } = require("discord.js");
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const semester_text = require("../index.js").semester_text;
 
 module.exports = {
 	name: "snipes",
@@ -30,13 +31,13 @@ module.exports = {
 
 		if (user_snipes.length !== 0) {
 			disc_embed
-				.setAuthor("Snipes ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png")
+				.setAuthor(`Snipes ● ${semester_text}`, "https://scarletknights.com/images/2020/9/30/BlackR.png")
 				.setTitle("Sections Monitoring")
 				.setColor("#89CFF0")
 				.setDescription(result);
 		} else {
 			disc_embed
-				.setAuthor("Snipes ● Fall 2021", "https://scarletknights.com/images/2020/9/30/BlackR.png")
+				.setAuthor(`Snipes ● ${semester_text}`, "https://scarletknights.com/images/2020/9/30/BlackR.png")
 				.setTitle("No sections are monitored!")
 				.setColor("#f5a856")
 				.setDescription("Add an index to start monitoring for openings.");
